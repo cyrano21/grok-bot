@@ -17,20 +17,20 @@ function CodeBlock({ code, lang }: { code: string; lang?: string }) {
     }
   };
   return (
-    <div className="group/code relative my-3 overflow-hidden rounded-xl border border-white/10 bg-[#0c0c0c]">
-      <div className="flex items-center justify-between border-b border-white/10 px-4 py-2">
-        <span className="font-mono text-xs text-neutral-400">{lang || "code"}</span>
+    <div className="group/code relative my-3 overflow-hidden rounded-xl border border-border bg-muted">
+      <div className="flex items-center justify-between border-b border-border px-4 py-2">
+        <span className="font-mono text-xs text-muted-foreground">{lang || "code"}</span>
         <button
           onClick={copy}
           aria-label="Copier le code"
-          className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-neutral-400 transition-colors hover:bg-white/10 hover:text-neutral-100"
+          className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         >
           {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
           {copied ? "Copié" : "Copier"}
         </button>
       </div>
       <pre className="overflow-x-auto p-4 text-[13px] leading-relaxed">
-        <code className="font-mono text-neutral-200">{code}</code>
+        <code className="font-mono text-foreground">{code}</code>
       </pre>
     </div>
   );
@@ -39,7 +39,7 @@ function CodeBlock({ code, lang }: { code: string; lang?: string }) {
 export function MessageContent({ content }: { content: string }) {
   const parsed = useMemo(() => content, [content]);
   return (
-    <div className="min-w-0 break-words text-[15px] leading-7 text-neutral-100">
+    <div className="min-w-0 break-words text-[15px] leading-7 text-foreground">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
@@ -65,27 +65,27 @@ export function MessageContent({ content }: { content: string }) {
               href={href}
               target="_blank"
               rel="noopener noreferrer"
-              className="underline decoration-neutral-500 underline-offset-2 hover:decoration-neutral-200"
+              className="underline decoration-muted-foreground/50 underline-offset-2 hover:decoration-foreground"
             >
               {children}
             </a>
           ),
           blockquote: ({ children }) => (
-            <blockquote className="mb-3 border-l-2 border-neutral-600 pl-4 text-neutral-300 last:mb-0">
+            <blockquote className="mb-3 border-l-2 border-muted-foreground/40 pl-4 text-muted-foreground last:mb-0">
               {children}
             </blockquote>
           ),
           table: ({ children }) => (
-            <div className="my-3 overflow-x-auto rounded-lg border border-white/10">
+            <div className="my-3 overflow-x-auto rounded-lg border border-border">
               <table className="w-full border-collapse text-sm">{children}</table>
             </div>
           ),
           th: ({ children }) => (
-            <th className="border-b border-white/10 bg-white/5 px-3 py-2 text-left font-semibold">
+            <th className="border-b border-border bg-muted/60 px-3 py-2 text-left font-semibold">
               {children}
             </th>
           ),
-          td: ({ children }) => <td className="border-b border-white/5 px-3 py-2">{children}</td>,
+          td: ({ children }) => <td className="border-b border-border/60 px-3 py-2">{children}</td>,
           code: (props) => {
             const { className, children } = props as {
               className?: string;
@@ -98,13 +98,13 @@ export function MessageContent({ content }: { content: string }) {
               return <CodeBlock code={text} lang={match?.[1]} />;
             }
             return (
-              <code className="rounded-md bg-white/10 px-1.5 py-0.5 font-mono text-[13px] text-neutral-200">
+              <code className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-[13px] text-foreground">
                 {text}
               </code>
             );
           },
           pre: ({ children }) => <>{children}</>,
-          hr: () => <hr className="my-4 border-white/10" />,
+          hr: () => <hr className="my-4 border-border" />,
         }}
       >
         {parsed}

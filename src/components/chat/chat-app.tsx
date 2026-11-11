@@ -311,7 +311,7 @@ export function ChatApp() {
   const empty = messages.length === 0 && streamingText === null;
 
   return (
-    <div className="flex h-dvh overflow-hidden bg-[#050505]">
+    <div className="flex h-dvh overflow-hidden bg-background">
       <Sidebar
         conversations={conversations}
         activeId={activeId}
@@ -325,11 +325,11 @@ export function ChatApp() {
       />
 
       <main className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-white/10 px-3 md:px-5">
+        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-3 md:px-5">
           <button
             onClick={() => setSidebarOpen(true)}
             aria-label="Ouvrir le menu"
-            className="rounded-lg p-2 text-neutral-300 hover:bg-white/10 md:hidden"
+            className="rounded-lg p-2 text-muted-foreground hover:bg-accent hover:text-foreground md:hidden"
           >
             <Menu className="size-5" />
           </button>
@@ -339,15 +339,15 @@ export function ChatApp() {
               aria-haspopup="listbox"
               aria-expanded={modeOpen}
               aria-label="Choisir le mode du modèle"
-              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-semibold text-neutral-100 transition-colors hover:bg-white/10"
+              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-semibold text-foreground transition-colors hover:bg-accent"
             >
               {mode === "standard" ? (
-                <Zap className="size-4 text-neutral-300" />
+                <Zap className="size-4 text-muted-foreground" />
               ) : (
-                <Brain className="size-4 text-neutral-300" />
+                <Brain className="size-4 text-muted-foreground" />
               )}
               {mode === "standard" ? "Standard" : "Raisonnement"}
-              <ChevronDown className={`size-3.5 text-neutral-500 transition-transform ${modeOpen ? "rotate-180" : ""}`} />
+              <ChevronDown className={`size-3.5 text-muted-foreground transition-transform ${modeOpen ? "rotate-180" : ""}`} />
             </button>
             {modeOpen && (
               <>
@@ -355,7 +355,7 @@ export function ChatApp() {
                 <div
                   role="listbox"
                   aria-label="Modes disponibles"
-                  className="absolute left-0 top-full z-30 mt-1.5 w-72 overflow-hidden rounded-xl border border-white/10 bg-[#141414] p-1 shadow-[0_12px_40px_rgba(0,0,0,0.6)]"
+                  className="absolute left-0 top-full z-30 mt-1.5 w-72 overflow-hidden rounded-xl border border-border bg-popover p-1 shadow-[0_12px_40px_rgba(0,0,0,0.25)] dark:shadow-[0_12px_40px_rgba(0,0,0,0.6)]"
                 >
                   {MODES.map((m) => {
                     const Icon = m.icon;
@@ -367,15 +367,15 @@ export function ChatApp() {
                         aria-selected={active}
                         onClick={() => changeMode(m.id)}
                         className={`flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left transition-colors ${
-                          active ? "bg-white/10" : "hover:bg-white/5"
+                          active ? "bg-accent" : "hover:bg-accent/60"
                         }`}
                       >
-                        <Icon className="mt-0.5 size-4 shrink-0 text-neutral-300" />
+                        <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                         <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-medium text-neutral-100">{m.label}</span>
-                          <span className="block text-xs leading-4 text-neutral-500">{m.desc}</span>
+                          <span className="block text-sm font-medium text-popover-foreground">{m.label}</span>
+                          <span className="block text-xs leading-4 text-muted-foreground">{m.desc}</span>
                         </span>
-                        {active && <Check className="mt-1 size-4 shrink-0 text-neutral-200" />}
+                        {active && <Check className="mt-1 size-4 shrink-0 text-foreground" />}
                       </button>
                     );
                   })}
@@ -383,14 +383,14 @@ export function ChatApp() {
               </>
             )}
           </div>
-          <span className="hidden min-w-0 flex-1 truncate text-sm text-neutral-500 md:block">
+          <span className="hidden min-w-0 flex-1 truncate text-sm text-muted-foreground md:block">
             {activeTitle || ""}
           </span>
           <span className="flex-1 md:hidden" />
           <button
             onClick={newChat}
             aria-label="Nouvelle conversation"
-            className="rounded-lg p-2 text-neutral-300 transition-colors hover:bg-white/10 hover:text-white"
+            className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           >
             <Plus className="size-5" />
           </button>
@@ -399,17 +399,17 @@ export function ChatApp() {
         <div
           ref={scrollRef}
           onScroll={onScroll}
-          className="flex-1 overflow-y-auto [scrollbar-width:thin] [scrollbar-color:#2a2a2a_transparent]"
+          className="flex-1 overflow-y-auto [scrollbar-width:thin]"
         >
           {empty ? (
             <div className="flex h-full flex-col items-center justify-center px-4">
-              <div className="flex size-14 items-center justify-center rounded-2xl bg-white shadow-[0_0_60px_rgba(255,255,255,0.12)]">
-                <span className="text-2xl font-black text-black">G</span>
+              <div className="flex size-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-[0_0_60px_rgba(0,0,0,0.12)] dark:shadow-[0_0_60px_rgba(255,255,255,0.12)]">
+                <span className="text-2xl font-black">G</span>
               </div>
-              <h2 className="mt-5 text-3xl font-bold tracking-tight text-neutral-100">
-                Grok <span className="text-neutral-500">Bot</span>
+              <h2 className="mt-5 text-3xl font-bold tracking-tight text-foreground">
+                Grok <span className="text-muted-foreground">Bot</span>
               </h2>
-              <p className="mt-2 text-sm text-neutral-500">
+              <p className="mt-2 text-sm text-muted-foreground">
                 Ton assistant IA, sans abonnement.
               </p>
               <div className="mt-8 grid w-full max-w-xl grid-cols-1 gap-2 sm:grid-cols-2">
@@ -417,7 +417,7 @@ export function ChatApp() {
                   <button
                     key={s}
                     onClick={() => void send(s)}
-                    className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-left text-[13px] text-neutral-300 transition-colors hover:border-white/25 hover:bg-white/[0.07] hover:text-neutral-100"
+                    className="rounded-xl border border-border bg-card/60 px-4 py-3 text-left text-[13px] text-muted-foreground transition-colors hover:border-foreground/25 hover:bg-accent hover:text-foreground"
                   >
                     {s}
                   </button>
@@ -428,21 +428,21 @@ export function ChatApp() {
             <div className="mx-auto w-full max-w-3xl px-4 py-6 md:px-6">
               {loadingConv ? (
                 <div className="flex justify-center py-16">
-                  <Bot className="size-6 animate-pulse text-neutral-600" />
+                  <Bot className="size-6 animate-pulse text-muted-foreground" />
                 </div>
               ) : (
                 <>
                   {messages.map((m) =>
                     m.role === "user" ? (
                       <div key={m.id} className="mb-5 flex justify-end">
-                        <div className="max-w-[85%] whitespace-pre-wrap rounded-[20px] bg-[#1e1e1e] px-4 py-2.5 text-[15px] leading-6 text-neutral-100">
+                        <div className="max-w-[85%] whitespace-pre-wrap rounded-[20px] bg-secondary px-4 py-2.5 text-[15px] leading-6 text-secondary-foreground">
                           {m.content}
                         </div>
                       </div>
                     ) : (
                       <div key={m.id} className="group mb-6 flex gap-3">
-                        <div className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg bg-white">
-                          <span className="text-xs font-black text-black">G</span>
+                        <div className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg bg-primary">
+                          <span className="text-xs font-black text-primary-foreground">G</span>
                         </div>
                         <div className="min-w-0 flex-1">
                           <MessageContent content={m.content} />
@@ -450,7 +450,7 @@ export function ChatApp() {
                             <button
                               onClick={() => void copyMessage(m)}
                               aria-label="Copier la réponse"
-                              className="rounded-md p-1.5 text-neutral-600 hover:bg-white/10 hover:text-neutral-300"
+                              className="rounded-md p-1.5 text-muted-foreground/80 hover:bg-accent hover:text-foreground"
                             >
                               {copiedId === m.id ? (
                                 <Check className="size-3.5" />
@@ -462,7 +462,7 @@ export function ChatApp() {
                               <button
                                 onClick={() => void regenerate()}
                                 aria-label="Régénérer la réponse"
-                                className="rounded-md p-1.5 text-neutral-600 hover:bg-white/10 hover:text-neutral-300"
+                                className="rounded-md p-1.5 text-muted-foreground/80 hover:bg-accent hover:text-foreground"
                               >
                                 <RefreshCw className="size-3.5" />
                               </button>
@@ -474,20 +474,20 @@ export function ChatApp() {
                   )}
                   {streamingText !== null && (
                     <div className="mb-6 flex gap-3">
-                      <div className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg bg-white">
-                        <span className="text-xs font-black text-black">G</span>
+                      <div className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg bg-primary">
+                        <span className="text-xs font-black text-primary-foreground">G</span>
                       </div>
                       <div className="min-w-0 flex-1">
                         {streamingText === "" ? (
                           <div className="flex gap-1 py-2" aria-label="Génération en cours">
-                            <span className="size-2 animate-bounce rounded-full bg-neutral-500 [animation-delay:0ms]" />
-                            <span className="size-2 animate-bounce rounded-full bg-neutral-500 [animation-delay:150ms]" />
-                            <span className="size-2 animate-bounce rounded-full bg-neutral-500 [animation-delay:300ms]" />
+                            <span className="size-2 animate-bounce rounded-full bg-muted-foreground [animation-delay:0ms]" />
+                            <span className="size-2 animate-bounce rounded-full bg-muted-foreground [animation-delay:150ms]" />
+                            <span className="size-2 animate-bounce rounded-full bg-muted-foreground [animation-delay:300ms]" />
                           </div>
                         ) : (
                           <>
                             <MessageContent content={streamingText} />
-                            <span className="ml-0.5 inline-block h-4 w-[7px] animate-pulse bg-neutral-300 align-text-bottom" />
+                            <span className="ml-0.5 inline-block h-4 w-[7px] animate-pulse bg-foreground align-text-bottom" />
                           </>
                         )}
                       </div>

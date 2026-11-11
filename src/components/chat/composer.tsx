@@ -40,7 +40,7 @@ export function Composer({
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 pb-4 md:px-6">
-      <div className="flex items-end gap-2 rounded-[26px] border border-white/15 bg-[#141414] p-2 pl-5 shadow-[0_8px_30px_rgba(0,0,0,0.45)] transition-colors focus-within:border-white/30">
+      <div className="flex items-end gap-2 rounded-[26px] border border-border bg-card p-2 pl-5 shadow-[0_8px_30px_rgba(0,0,0,0.18)] transition-colors focus-within:border-foreground/30 dark:shadow-[0_8px_30px_rgba(0,0,0,0.45)]">
         <textarea
           ref={ref}
           rows={1}
@@ -54,13 +54,13 @@ export function Composer({
           }}
           placeholder="Pose ta question à Grok Bot…"
           aria-label="Message"
-          className="max-h-[200px] min-h-[28px] flex-1 resize-none bg-transparent py-2 text-[15px] leading-6 text-neutral-100 outline-none placeholder:text-neutral-500"
+          className="max-h-[200px] min-h-[28px] flex-1 resize-none bg-transparent py-2 text-[15px] leading-6 text-foreground outline-none placeholder:text-muted-foreground"
         />
         {streaming ? (
           <button
             onClick={onStop}
             aria-label="Arrêter la génération"
-            className="flex size-9 shrink-0 items-center justify-center rounded-full bg-neutral-200 text-black transition-transform hover:scale-105"
+            className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-transform hover:scale-105"
           >
             <Square className="size-3.5 fill-current" />
           </button>
@@ -69,13 +69,13 @@ export function Composer({
             onClick={submit}
             disabled={!value.trim()}
             aria-label="Envoyer"
-            className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white text-black transition-all hover:scale-105 disabled:scale-100 disabled:bg-neutral-700 disabled:text-neutral-400"
+            className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-all hover:scale-105 disabled:scale-100 disabled:bg-muted disabled:text-muted-foreground"
           >
             <ArrowUp className="size-4" strokeWidth={2.5} />
           </button>
         )}
       </div>
-      <p className="mt-2 text-center text-[11px] text-neutral-600">
+      <p className="mt-2 text-center text-[11px] text-muted-foreground/80">
         Grok Bot peut se tromper. Vérifie les informations importantes.
       </p>
     </div>
