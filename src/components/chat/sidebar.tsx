@@ -209,7 +209,7 @@ export function Sidebar({
         <div className="border-t border-border px-4 py-3">
           <div className="flex items-center justify-between">
             <p className="text-[11px] leading-4 text-muted-foreground">
-              Grok Bot v1.1 — auto-hébergé
+              Grok Bot v1.2 — auto-hébergé
               <br />
               Sans abonnement, tes données restent locales.
             </p>

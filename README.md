@@ -10,6 +10,7 @@ Self-hosted alternative — **no subscription required**.
 - **Conversations** — full history persisted in SQLite (Prisma), auto-titled from the first message
 - **Sidebar** — rename, delete, switch conversations; mobile drawer + desktop collapse (Ctrl/⌘+B)
 - **Markdown rendering** — headings, lists, tables, code blocks with per-block copy button
+- **Live preview (artifacts)** — HTML code blocks get `Code | Aperçu` tabs: the generated page renders in a sandboxed iframe (scripts allowed, no same-origin access), with an "open in new tab" button; updates live while streaming (debounced)
 - **Message actions** — copy answer, regenerate the last response
 - **Light / dark theme** — Grok-style palettes, toggle in the sidebar (Ctrl/⌘+Maj+L)
 - **Image upload (vision)** — attach up to 4 images, resized client-side, understood by the model

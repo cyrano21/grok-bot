@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Check, Copy } from "lucide-react";
+import { HtmlPreview, isPreviewableHtml } from "./html-preview";
 
 function CodeBlock({ code, lang }: { code: string; lang?: string }) {
   const [copied, setCopied] = useState(false);
@@ -94,6 +95,9 @@ export function MessageContent({ content }: { content: string }) {
             const match = /language-(\w+)/.exec(className || "");
             const text = String(children ?? "").replace(/\n$/, "");
             const isBlock = Boolean(match) || text.includes("\n");
+            if (isBlock && isPreviewableHtml(text, match?.[1])) {
+              return <HtmlPreview code={text} lang={match?.[1]} />;
+            }
             if (isBlock) {
               return <CodeBlock code={text} lang={match?.[1]} />;
             }
