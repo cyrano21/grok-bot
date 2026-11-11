@@ -168,17 +168,62 @@ Utilise ces résultats pour fonder ta réponse. Cite les sources concernées ave
     ];
 
     const useVision = history.some((m) => parseImages(m.images).length > 0);
-    const sdkStream = (await (useVision
-      ? zai.chat.completions.createVision({
-          messages: llmMessages,
-          stream: true,
-          thinking: { type: mode === "raisonnement" ? "enabled" : "disabled" },
-        })
-      : zai.chat.completions.create({
-          messages: llmMessages,
-          stream: true,
-          thinking: { type: mode === "raisonnement" ? "enabled" : "disabled" },
-        }))) as ReadableStream<Uint8Array>;
+
+    // Fournisseur BYOK (OpenAI-compatible) si fourni, sinon moteur intégré.
+    const custom = body?.provider as
+      | { baseUrl?: unknown; apiKey?: unknown; model?: unknown }
+      | undefined;
+    const useCustom =
+      typeof custom?.baseUrl === "string" &&
+      custom.baseUrl.startsWith("http") &&
+      typeof custom?.apiKey === "string" &&
+      custom.apiKey.length > 0 &&
+      typeof custom?.model === "string" &&
+      custom.model.length > 0;
+
+    let sdkStream: ReadableStream<Uint8Array>;
+    if (useCustom) {
+      const upstream = await fetch(
+        `${(custom as { baseUrl: string }).baseUrl.replace(/\/+$/, "")}/chat/completions`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${(custom as { apiKey: string }).apiKey}`,
+          },
+          body: JSON.stringify({
+            model: (custom as { model: string }).model,
+            messages: llmMessages,
+            stream: true,
+          }),
+          signal: AbortSignal.timeout(120_000),
+        },
+      );
+      if (!upstream.ok || !upstream.body) {
+        const text = await upstream.text().catch(() => "");
+        return Response.json(
+          {
+            error: `Fournisseur « ${(custom as { model: string }).model} » : HTTP ${upstream.status}${
+              text ? ` — ${text.slice(0, 220)}` : ""
+            }`,
+          },
+          { status: 502 },
+        );
+      }
+      sdkStream = upstream.body;
+    } else {
+      sdkStream = (await (useVision
+        ? zai.chat.completions.createVision({
+            messages: llmMessages,
+            stream: true,
+            thinking: { type: mode === "raisonnement" ? "enabled" : "disabled" },
+          })
+        : zai.chat.completions.create({
+            messages: llmMessages,
+            stream: true,
+            thinking: { type: mode === "raisonnement" ? "enabled" : "disabled" },
+          }))) as ReadableStream<Uint8Array>;
+    }
 
     const [toClient, toPersist] = sdkStream.tee();
     const convId = conversationId;

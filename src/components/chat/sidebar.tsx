@@ -18,7 +18,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Moon, Sun, Keyboard } from "lucide-react";
+import { Moon, Sun, Keyboard, Settings } from "lucide-react";
 
 function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
@@ -57,6 +57,7 @@ export function Sidebar({
   onRename,
   onDelete,
   onOpenShortcuts,
+  onOpenSettings,
 }: {
   conversations: ConversationItem[];
   activeId: string | null;
@@ -69,6 +70,7 @@ export function Sidebar({
   onRename: (id: string, title: string) => void;
   onDelete: (id: string) => void;
   onOpenShortcuts: () => void;
+  onOpenSettings: () => void;
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
@@ -212,6 +214,14 @@ export function Sidebar({
               Sans abonnement, tes données restent locales.
             </p>
             <div className="flex items-center gap-0.5">
+              <button
+                onClick={onOpenSettings}
+                aria-label="Paramètres des fournisseurs"
+                title="Fournisseurs IA (BYOK)"
+                className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              >
+                <Settings className="size-4" />
+              </button>
               <button
                 onClick={onOpenShortcuts}
                 aria-label="Raccourcis clavier"

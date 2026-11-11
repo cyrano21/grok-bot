@@ -17,6 +17,7 @@ import {
   PanelLeft,
   Plus,
   RefreshCw,
+  Settings,
   Zap,
   Brain,
 } from "lucide-react";
@@ -25,6 +26,15 @@ import { Sidebar, type ConversationItem } from "./sidebar";
 import { Composer } from "./composer";
 import { MessageContent } from "./message-content";
 import { ShortcutsDialog } from "./shortcuts-dialog";
+import { ProvidersDialog } from "./providers-dialog";
+import {
+  BUILTIN_PROVIDER_ID,
+  loadActiveProviderId,
+  loadProviders,
+  saveActiveProviderId,
+  saveProviders,
+  type Provider,
+} from "@/lib/providers";
 
 type Msg = {
   id: string;
@@ -61,6 +71,9 @@ export function ChatApp() {
   const [webSearch, setWebSearch] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [providersOpen, setProvidersOpen] = useState(false);
+  const [providers, setProviders] = useState<Provider[]>([]);
+  const [activeProviderId, setActiveProviderId] = useState<string>(BUILTIN_PROVIDER_ID);
   const { resolvedTheme, setTheme } = useTheme();
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -70,7 +83,29 @@ export function ChatApp() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- lecture post-montage (SSR)
     if (savedMode === "standard" || savedMode === "raisonnement") setMode(savedMode);
     if (window.localStorage.getItem("grok-web") === "1") setWebSearch(true);
+    setProviders(loadProviders());
+    setActiveProviderId(loadActiveProviderId());
   }, []);
+
+  const updateProviders = (list: Provider[]) => {
+    setProviders(list);
+    saveProviders(list);
+    if (activeProviderId !== BUILTIN_PROVIDER_ID && !list.some((p) => p.id === activeProviderId)) {
+      setActiveProviderId(BUILTIN_PROVIDER_ID);
+      saveActiveProviderId(BUILTIN_PROVIDER_ID);
+    }
+  };
+
+  const selectProvider = (id: string) => {
+    setActiveProviderId(id);
+    saveActiveProviderId(id);
+    setModeOpen(false);
+  };
+
+  const activeProvider =
+    activeProviderId !== BUILTIN_PROVIDER_ID
+      ? providers.find((p) => p.id === activeProviderId) ?? null
+      : null;
 
   const toggleWeb = () => {
     setWebSearch((v) => {
@@ -217,10 +252,24 @@ export function ChatApp() {
     accRef.current = "";
 
     try {
+      const payload: Record<string, unknown> = {
+        conversationId: activeId,
+        message: text,
+        mode,
+        images,
+        webSearch,
+      };
+      if (activeProvider) {
+        payload.provider = {
+          baseUrl: activeProvider.baseUrl,
+          apiKey: activeProvider.apiKey,
+          model: activeProvider.model,
+        };
+      }
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversationId: activeId, message: text, mode, images, webSearch }),
+        body: JSON.stringify(payload),
         signal: controller.signal,
       });
       if (!res.ok || !res.body) {
@@ -334,10 +383,23 @@ export function ChatApp() {
     accRef.current = "";
 
     try {
+      const regenPayload: Record<string, unknown> = {
+        conversationId: activeId,
+        regenerate: true,
+        mode,
+        webSearch,
+      };
+      if (activeProvider) {
+        regenPayload.provider = {
+          baseUrl: activeProvider.baseUrl,
+          apiKey: activeProvider.apiKey,
+          model: activeProvider.model,
+        };
+      }
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversationId: activeId, regenerate: true, mode, webSearch }),
+        body: JSON.stringify(regenPayload),
         signal: controller.signal,
       });
       if (!res.ok || !res.body) {
@@ -431,9 +493,17 @@ export function ChatApp() {
         onRename={renameConversation}
         onDelete={deleteConversation}
         onOpenShortcuts={() => setShortcutsOpen(true)}
+        onOpenSettings={() => setProvidersOpen(true)}
       />
 
       <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+      <ProvidersDialog
+        open={providersOpen}
+        onOpenChange={setProvidersOpen}
+        providers={providers}
+        activeProviderId={activeProviderId}
+        onChange={updateProviders}
+      />
 
       <main className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-3 md:px-5">
@@ -499,6 +569,57 @@ export function ChatApp() {
                       </button>
                     );
                   })}
+                  <div className="my-1 border-t border-border" />
+                  <p className="px-3 pb-1 pt-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Fournisseur
+                  </p>
+                  <button
+                    role="option"
+                    aria-selected={activeProviderId === BUILTIN_PROVIDER_ID}
+                    onClick={() => selectProvider(BUILTIN_PROVIDER_ID)}
+                    className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors ${
+                      activeProviderId === BUILTIN_PROVIDER_ID ? "bg-accent" : "hover:bg-accent/60"
+                    }`}
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm text-popover-foreground">Grok Bot (intégré)</span>
+                      <span className="block text-xs text-muted-foreground">Moteur gratuit, sans clé</span>
+                    </span>
+                    {activeProviderId === BUILTIN_PROVIDER_ID && (
+                      <Check className="size-4 shrink-0 text-foreground" />
+                    )}
+                  </button>
+                  {providers.map((p) => (
+                    <button
+                      key={p.id}
+                      role="option"
+                      aria-selected={activeProviderId === p.id}
+                      onClick={() => selectProvider(p.id)}
+                      className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors ${
+                        activeProviderId === p.id ? "bg-accent" : "hover:bg-accent/60"
+                      }`}
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm text-popover-foreground">
+                          {p.name || "Fournisseur sans nom"}
+                        </span>
+                        <span className="block truncate text-xs text-muted-foreground">{p.model}</span>
+                      </span>
+                      {activeProviderId === p.id && (
+                        <Check className="size-4 shrink-0 text-foreground" />
+                      )}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => {
+                      setModeOpen(false);
+                      setProvidersOpen(true);
+                    }}
+                    className="mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
+                  >
+                    <Settings className="size-3.5" />
+                    Gérer les fournisseurs…
+                  </button>
                 </div>
               </>
             )}
