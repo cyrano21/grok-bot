@@ -15,6 +15,20 @@ Règles :
 - Tu peux avoir de l'humour, mais reste pertinent : l'utilité passe avant la blague.`;
 
 const CONTEXT_LIMIT = 24;
+const MAX_IMAGES = 4;
+const MAX_IMAGE_CHARS = 2_600_000; // ~2 Mo en base64
+
+function sanitizeImages(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter(
+      (u): u is string =>
+        typeof u === "string" &&
+        u.startsWith("data:image/") &&
+        u.length <= MAX_IMAGE_CHARS,
+    )
+    .slice(0, MAX_IMAGES);
+}
 
 export async function POST(req: Request) {
   try {
@@ -22,9 +36,10 @@ export async function POST(req: Request) {
     const message: string = (body?.message ?? "").toString().trim();
     const regenerate: boolean = body?.regenerate === true;
     const mode: string = body?.mode === "raisonnement" ? "raisonnement" : "standard";
+    const images: string[] = regenerate ? [] : sanitizeImages(body?.images);
     let conversationId: string | null = (body?.conversationId ?? "").toString() || null;
 
-    if (!regenerate && !message) {
+    if (!regenerate && !message && images.length === 0) {
       return Response.json({ error: "Message requis" }, { status: 400 });
     }
 
@@ -58,7 +73,12 @@ export async function POST(req: Request) {
       }
     } else {
       await db.message.create({
-        data: { conversationId, role: "user", content: message },
+        data: {
+          conversationId,
+          role: "user",
+          content: message,
+          images: images.length ? JSON.stringify(images) : null,
+        },
       });
     }
 
@@ -66,21 +86,54 @@ export async function POST(req: Request) {
       where: { conversationId },
       orderBy: { createdAt: "asc" },
       take: CONTEXT_LIMIT,
-      select: { role: true, content: true },
+      select: { role: true, content: true, images: true },
     });
 
+    const parseImages = (raw: string | null): string[] => {
+      try {
+        const arr = raw ? (JSON.parse(raw) as unknown) : [];
+        return Array.isArray(arr) ? arr.filter((u): u is string => typeof u === "string") : [];
+      } catch {
+        return [];
+      }
+    };
+
+    const llmMessages = [
+      { role: "system" as const, content: SYSTEM_PROMPT as string },
+      ...history.map((m) => {
+        const imgs = parseImages(m.images);
+        if (imgs.length === 0) {
+          return {
+            role: m.role === "assistant" ? ("assistant" as const) : ("user" as const),
+            content: m.content as string,
+          };
+        }
+        return {
+          role: "user" as const,
+          content: [
+            { type: "text" as const, text: m.content || " " },
+            ...imgs.map((url) => ({
+              type: "image_url" as const,
+              image_url: { url },
+            })),
+          ],
+        };
+      }),
+    ];
+
+    const useVision = history.some((m) => parseImages(m.images).length > 0);
     const zai = await ZAI.create();
-    const sdkStream = (await zai.chat.completions.create({
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        ...history.map((m) => ({
-          role: m.role === "assistant" ? ("assistant" as const) : ("user" as const),
-          content: m.content,
-        })),
-      ],
-      stream: true,
-      thinking: { type: mode === "raisonnement" ? "enabled" : "disabled" },
-    })) as ReadableStream<Uint8Array>;
+    const sdkStream = (await (useVision
+      ? zai.chat.completions.createVision({
+          messages: llmMessages,
+          stream: true,
+          thinking: { type: mode === "raisonnement" ? "enabled" : "disabled" },
+        })
+      : zai.chat.completions.create({
+          messages: llmMessages,
+          stream: true,
+          thinking: { type: mode === "raisonnement" ? "enabled" : "disabled" },
+        }))) as ReadableStream<Uint8Array>;
 
     const [toClient, toPersist] = sdkStream.tee();
     const convId = conversationId;

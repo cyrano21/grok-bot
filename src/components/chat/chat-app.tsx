@@ -7,7 +7,7 @@ import { Sidebar, type ConversationItem } from "./sidebar";
 import { Composer } from "./composer";
 import { MessageContent } from "./message-content";
 
-type Msg = { id: string; role: string; content: string };
+type Msg = { id: string; role: string; content: string; images?: string[] };
 type Mode = "standard" | "raisonnement";
 
 const MODES: { id: Mode; label: string; desc: string; icon: typeof Zap }[] = [
@@ -102,7 +102,14 @@ export function ChatApp() {
         const res = await fetch(`/api/conversations/${id}`);
         if (!res.ok) throw new Error("Conversation introuvable");
         const data = await res.json();
-        setMessages(data.messages ?? []);
+        setMessages(
+          (data.messages ?? []).map((m: { id: string; role: string; content: string; images?: string | null }) => ({
+            id: m.id,
+            role: m.role,
+            content: m.content,
+            images: m.images ? (JSON.parse(m.images) as string[]) : undefined,
+          })),
+        );
         stickRef.current = true;
       } catch (e) {
         toast.error((e as Error).message);
@@ -147,13 +154,16 @@ export function ChatApp() {
     }
   };
 
-  const send = async (text: string) => {
-    if (streaming || !text.trim()) return;
+  const send = async (text: string, images: string[] = []) => {
+    if (streaming || (!text.trim() && images.length === 0)) return;
     const controller = new AbortController();
     abortRef.current = controller;
     setStreaming(true);
     stickRef.current = true;
-    setMessages((prev) => [...prev, { id: `u-${Date.now()}`, role: "user", content: text }]);
+    setMessages((prev) => [
+      ...prev,
+      { id: `u-${Date.now()}`, role: "user", content: text, images: images.length ? images : undefined },
+    ]);
     setStreamingText("");
     accRef.current = "";
 
@@ -161,7 +171,7 @@ export function ChatApp() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversationId: activeId, message: text, mode }),
+        body: JSON.stringify({ conversationId: activeId, message: text, mode, images }),
         signal: controller.signal,
       });
       if (!res.ok || !res.body) {
@@ -416,7 +426,7 @@ export function ChatApp() {
                 {SUGGESTIONS.map((s) => (
                   <button
                     key={s}
-                    onClick={() => void send(s)}
+                    onClick={() => void send(s, [])}
                     className="rounded-xl border border-border bg-card/60 px-4 py-3 text-left text-[13px] text-muted-foreground transition-colors hover:border-foreground/25 hover:bg-accent hover:text-foreground"
                   >
                     {s}
@@ -435,8 +445,32 @@ export function ChatApp() {
                   {messages.map((m) =>
                     m.role === "user" ? (
                       <div key={m.id} className="mb-5 flex justify-end">
-                        <div className="max-w-[85%] whitespace-pre-wrap rounded-[20px] bg-secondary px-4 py-2.5 text-[15px] leading-6 text-secondary-foreground">
-                          {m.content}
+                        <div className="max-w-[85%] space-y-1.5">
+                          {m.images && m.images.length > 0 && (
+                            <div className="flex flex-wrap justify-end gap-1.5">
+                              {m.images.map((src, i) => (
+                                <a
+                                  key={i}
+                                  href={src}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="block"
+                                >
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={src}
+                                    alt={`Image jointe ${i + 1}`}
+                                    className="max-h-56 rounded-2xl border border-border object-cover"
+                                  />
+                                </a>
+                              ))}
+                            </div>
+                          )}
+                          {m.content && (
+                            <div className="inline-block whitespace-pre-wrap rounded-[20px] bg-secondary px-4 py-2.5 text-[15px] leading-6 text-secondary-foreground">
+                              {m.content}
+                            </div>
+                          )}
                         </div>
                       </div>
                     ) : (
@@ -499,7 +533,7 @@ export function ChatApp() {
           )}
         </div>
 
-        <Composer streaming={streaming} onSend={(t) => void send(t)} onStop={stop} />
+        <Composer streaming={streaming} onSend={(t, imgs) => void send(t, imgs)} onStop={stop} />
       </main>
     </div>
   );
