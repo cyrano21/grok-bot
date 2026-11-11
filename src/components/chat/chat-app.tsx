@@ -687,7 +687,6 @@ export function ChatApp() {
                                   rel="noopener noreferrer"
                                   className="block"
                                 >
-                                  {/* eslint-disable-next-line @next/next/no-img-element -- data URL locale */}
                                   <img
                                     src={src}
                                     alt={`Image jointe ${i + 1}`}
