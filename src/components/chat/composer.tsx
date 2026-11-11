@@ -1,16 +1,20 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, ImagePlus, Square, X } from "lucide-react";
+import { ArrowUp, Globe, ImagePlus, Square, X } from "lucide-react";
 import { toast } from "sonner";
 import { MAX_IMAGES, resizeImage } from "@/lib/image";
 
 export function Composer({
   streaming,
+  webSearch,
+  onToggleWeb,
   onSend,
   onStop,
 }: {
   streaming: boolean;
+  webSearch: boolean;
+  onToggleWeb: () => void;
   onSend: (text: string, images: string[]) => void;
   onStop: () => void;
 }) {
@@ -104,6 +108,20 @@ export function Composer({
           className="flex size-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
         >
           <ImagePlus className="size-5" />
+        </button>
+        <button
+          onClick={onToggleWeb}
+          disabled={streaming}
+          aria-pressed={webSearch}
+          aria-label="Recherche web"
+          title={webSearch ? "Recherche web activée" : "Recherche web désactivée"}
+          className={`flex size-9 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-40 ${
+            webSearch
+              ? "bg-primary text-primary-foreground"
+              : "text-muted-foreground hover:bg-accent hover:text-foreground"
+          }`}
+        >
+          <Globe className="size-5" />
         </button>
         <textarea
           ref={ref}

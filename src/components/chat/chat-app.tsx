@@ -1,13 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Bot, Check, ChevronDown, Copy, Menu, Plus, RefreshCw, Zap, Brain } from "lucide-react";
+import { Bot, Check, ChevronDown, Copy, Globe, Menu, Plus, RefreshCw, Zap, Brain } from "lucide-react";
 import { toast } from "sonner";
 import { Sidebar, type ConversationItem } from "./sidebar";
 import { Composer } from "./composer";
 import { MessageContent } from "./message-content";
 
-type Msg = { id: string; role: string; content: string; images?: string[] };
+type Msg = {
+  id: string;
+  role: string;
+  content: string;
+  images?: string[];
+  sources?: { name: string; url: string; host_name: string; date: string }[];
+};
 type Mode = "standard" | "raisonnement";
 
 const MODES: { id: Mode; label: string; desc: string; icon: typeof Zap }[] = [
@@ -33,13 +39,23 @@ export function ChatApp() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>("standard");
   const [modeOpen, setModeOpen] = useState(false);
+  const [webSearch, setWebSearch] = useState(false);
 
   useEffect(() => {
-    const saved = window.localStorage.getItem("grok-mode");
+    const savedMode = window.localStorage.getItem("grok-mode");
     // Lecture post-montage obligatoire : localStorage indisponible côté serveur (SSR).
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (saved === "standard" || saved === "raisonnement") setMode(saved);
+    if (savedMode === "standard" || savedMode === "raisonnement") setMode(savedMode);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (window.localStorage.getItem("grok-web") === "1") setWebSearch(true);
   }, []);
+
+  const toggleWeb = () => {
+    setWebSearch((v) => {
+      window.localStorage.setItem("grok-web", v ? "0" : "1");
+      return !v;
+    });
+  };
 
   const changeMode = (m: Mode) => {
     setMode(m);
@@ -103,12 +119,23 @@ export function ChatApp() {
         if (!res.ok) throw new Error("Conversation introuvable");
         const data = await res.json();
         setMessages(
-          (data.messages ?? []).map((m: { id: string; role: string; content: string; images?: string | null }) => ({
-            id: m.id,
-            role: m.role,
-            content: m.content,
-            images: m.images ? (JSON.parse(m.images) as string[]) : undefined,
-          })),
+          (data.messages ?? []).map(
+            (m: {
+              id: string;
+              role: string;
+              content: string;
+              images?: string | null;
+              sources?: string | null;
+            }) => ({
+              id: m.id,
+              role: m.role,
+              content: m.content,
+              images: m.images ? (JSON.parse(m.images) as string[]) : undefined,
+              sources: m.sources
+                ? (JSON.parse(m.sources) as Msg["sources"])
+                : undefined,
+            }),
+          ),
         );
         stickRef.current = true;
       } catch (e) {
@@ -171,7 +198,7 @@ export function ChatApp() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversationId: activeId, message: text, mode, images }),
+        body: JSON.stringify({ conversationId: activeId, message: text, mode, images, webSearch }),
         signal: controller.signal,
       });
       if (!res.ok || !res.body) {
@@ -182,6 +209,7 @@ export function ChatApp() {
       const reader = res.body.getReader();
       const dec = new TextDecoder();
       let buf = "";
+      let receivedSources: Msg["sources"];
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -195,6 +223,10 @@ export function ChatApp() {
           if (!payload || payload === "[DONE]") continue;
           try {
             const j = JSON.parse(payload);
+            if (j?.grok_sources) {
+              receivedSources = j.grok_sources as Msg["sources"];
+              continue;
+            }
             accRef.current += j?.choices?.[0]?.delta?.content ?? "";
             setStreamingText(accRef.current);
           } catch {
@@ -204,7 +236,12 @@ export function ChatApp() {
       }
       setMessages((prev) => [
         ...prev,
-        { id: `a-${Date.now()}`, role: "assistant", content: accRef.current },
+        {
+          id: `a-${Date.now()}`,
+          role: "assistant",
+          content: accRef.current,
+          sources: receivedSources,
+        },
       ]);
       setStreamingText(null);
       if (newConvId) setActiveId(newConvId);
@@ -250,7 +287,7 @@ export function ChatApp() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversationId: activeId, regenerate: true, mode }),
+        body: JSON.stringify({ conversationId: activeId, regenerate: true, mode, webSearch }),
         signal: controller.signal,
       });
       if (!res.ok || !res.body) {
@@ -260,6 +297,7 @@ export function ChatApp() {
       const reader = res.body.getReader();
       const dec = new TextDecoder();
       let buf = "";
+      let receivedSources: Msg["sources"];
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -273,6 +311,10 @@ export function ChatApp() {
           if (!payload || payload === "[DONE]") continue;
           try {
             const j = JSON.parse(payload);
+            if (j?.grok_sources) {
+              receivedSources = j.grok_sources as Msg["sources"];
+              continue;
+            }
             accRef.current += j?.choices?.[0]?.delta?.content ?? "";
             setStreamingText(accRef.current);
           } catch {
@@ -282,7 +324,12 @@ export function ChatApp() {
       }
       setMessages((prev) => [
         ...prev,
-        { id: `a-${Date.now()}`, role: "assistant", content: accRef.current },
+        {
+          id: `a-${Date.now()}`,
+          role: "assistant",
+          content: accRef.current,
+          sources: receivedSources,
+        },
       ]);
       setStreamingText(null);
     } catch (e) {
@@ -480,6 +527,22 @@ export function ChatApp() {
                         </div>
                         <div className="min-w-0 flex-1">
                           <MessageContent content={m.content} />
+                          {m.sources && m.sources.length > 0 && (
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {m.sources.map((s, i) => (
+                                <a
+                                  key={i}
+                                  href={s.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex max-w-[260px] items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                                >
+                                  <Globe className="size-3 shrink-0" />
+                                  <span className="truncate">{s.name || s.host_name}</span>
+                                </a>
+                              ))}
+                            </div>
+                          )}
                           <div className="mt-2 flex items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
                             <button
                               onClick={() => void copyMessage(m)}
@@ -533,7 +596,13 @@ export function ChatApp() {
           )}
         </div>
 
-        <Composer streaming={streaming} onSend={(t, imgs) => void send(t, imgs)} onStop={stop} />
+        <Composer
+          streaming={streaming}
+          webSearch={webSearch}
+          onToggleWeb={toggleWeb}
+          onSend={(t, imgs) => void send(t, imgs)}
+          onStop={stop}
+        />
       </main>
     </div>
   );

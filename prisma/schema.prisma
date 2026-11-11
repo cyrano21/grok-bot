@@ -21,6 +21,7 @@ model Message {
   role           String
   content        String
   images         String? // JSON: tableau de data URLs (vision)
+  sources        String? // JSON: sources web [{name,url,host_name,date}]
   createdAt      DateTime     @default(now())
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 

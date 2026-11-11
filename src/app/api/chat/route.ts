@@ -30,6 +30,8 @@ function sanitizeImages(raw: unknown): string[] {
     .slice(0, MAX_IMAGES);
 }
 
+type Source = { name: string; url: string; host_name: string; date: string };
+
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => null);
@@ -37,6 +39,7 @@ export async function POST(req: Request) {
     const regenerate: boolean = body?.regenerate === true;
     const mode: string = body?.mode === "raisonnement" ? "raisonnement" : "standard";
     const images: string[] = regenerate ? [] : sanitizeImages(body?.images);
+    const webSearchOn: boolean = body?.webSearch === true;
     let conversationId: string | null = (body?.conversationId ?? "").toString() || null;
 
     if (!regenerate && !message && images.length === 0) {
@@ -98,8 +101,51 @@ export async function POST(req: Request) {
       }
     };
 
+    const zai = await ZAI.create();
+
+    // Recherche web optionnelle : résultats injectés comme contexte, sources persistées.
+    let sources: Source[] = [];
+    if (webSearchOn) {
+      const query = message || history[history.length - 1]?.content || "";
+      if (query.trim()) {
+        try {
+          const results = (await zai.functions.invoke("web_search", {
+            query: query.slice(0, 400),
+            num: 6,
+          })) as Array<{
+            url: string;
+            name: string;
+            snippet: string;
+            host_name: string;
+            date: string;
+          }>;
+          sources = (results ?? []).slice(0, 6).map((r) => ({
+            name: String(r?.name ?? ""),
+            url: String(r?.url ?? ""),
+            host_name: String(r?.host_name ?? ""),
+            date: String(r?.date ?? ""),
+          }));
+        } catch (e) {
+          console.error("[chat] web_search failed:", e);
+        }
+      }
+    }
+
     const llmMessages = [
       { role: "system" as const, content: SYSTEM_PROMPT as string },
+      ...(sources.length > 0
+        ? [
+            {
+              role: "system" as const,
+              content: `Résultats de recherche web (${new Date().toISOString().slice(0, 10)}) pour « ${
+                message || history[history.length - 1]?.content || ""
+              } » :
+${sources.map((s, i) => `[${i + 1}] ${s.name} — ${s.host_name}${s.date ? ` (${s.date})` : ""}\n    ${s.url}\n    ${s.snippet}`).join("\n")}
+
+Utilise ces résultats pour fonder ta réponse. Cite les sources concernées avec des références du type [1], [2] à la fin des phrases concernées. Si les résultats sont insuffisants ou périmés, dis-le clairement. Ne cite QUE les résultats ci-dessus comme sources web.`,
+            },
+          ]
+        : []),
       ...history.map((m) => {
         const imgs = parseImages(m.images);
         if (imgs.length === 0) {
@@ -122,7 +168,6 @@ export async function POST(req: Request) {
     ];
 
     const useVision = history.some((m) => parseImages(m.images).length > 0);
-    const zai = await ZAI.create();
     const sdkStream = (await (useVision
       ? zai.chat.completions.createVision({
           messages: llmMessages,
@@ -137,6 +182,25 @@ export async function POST(req: Request) {
 
     const [toClient, toPersist] = sdkStream.tee();
     const convId = conversationId;
+    const finalSources = sources;
+
+    // Enveloppe SSE : ajoute les sources en fin de flux (frame grok_sources) avant rendu client.
+    const enc = new TextEncoder();
+    const sourcesFrame = finalSources.length
+      ? `data: ${JSON.stringify({ grok_sources: finalSources })}\n\n`
+      : "";
+    const clientStream = sourcesFrame
+      ? toClient.pipeThrough(
+          new TransformStream<Uint8Array, Uint8Array>({
+            transform(chunk, controller) {
+              controller.enqueue(chunk);
+            },
+            flush(controller) {
+              controller.enqueue(enc.encode(sourcesFrame));
+            },
+          }),
+        )
+      : toClient;
 
     // Background: accumulate SSE deltas and persist the full assistant message
     void (async () => {
@@ -166,7 +230,12 @@ export async function POST(req: Request) {
         }
         if (full.trim()) {
           await db.message.create({
-            data: { conversationId: convId, role: "assistant", content: full },
+            data: {
+              conversationId: convId,
+              role: "assistant",
+              content: full,
+              sources: finalSources.length ? JSON.stringify(finalSources) : null,
+            },
           });
         }
         await db.conversation.update({
@@ -178,7 +247,7 @@ export async function POST(req: Request) {
       }
     })();
 
-    return new Response(toClient, {
+    return new Response(clientStream, {
       headers: {
         "Content-Type": "text/event-stream; charset=utf-8",
         "Cache-Control": "no-cache, no-transform",
