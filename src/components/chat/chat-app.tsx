@@ -1,11 +1,30 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Bot, Check, ChevronDown, Copy, Globe, Menu, Plus, RefreshCw, Zap, Brain } from "lucide-react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import { useTheme } from "next-themes";
+import {
+  Bot,
+  Check,
+  ChevronDown,
+  Copy,
+  Globe,
+  Menu,
+  PanelLeft,
+  Plus,
+  RefreshCw,
+  Zap,
+  Brain,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Sidebar, type ConversationItem } from "./sidebar";
 import { Composer } from "./composer";
 import { MessageContent } from "./message-content";
+import { ShortcutsDialog } from "./shortcuts-dialog";
 
 type Msg = {
   id: string;
@@ -40,13 +59,16 @@ export function ChatApp() {
   const [mode, setMode] = useState<Mode>("standard");
   const [modeOpen, setModeOpen] = useState(false);
   const [webSearch, setWebSearch] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const { resolvedTheme, setTheme } = useTheme();
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
     const savedMode = window.localStorage.getItem("grok-mode");
     // Lecture post-montage obligatoire : localStorage indisponible côté serveur (SSR).
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- lecture post-montage (SSR)
     if (savedMode === "standard" || savedMode === "raisonnement") setMode(savedMode);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (window.localStorage.getItem("grok-web") === "1") setWebSearch(true);
   }, []);
 
@@ -147,12 +169,12 @@ export function ChatApp() {
     [streaming]
   );
 
-  const newChat = () => {
-    if (streaming) return;
+  const newChat = useCallback(() => {
+    if (abortRef.current) return;
     setActiveId(null);
     setMessages([]);
     setSidebarOpen(false);
-  };
+  }, []);
 
   const deleteConversation = async (id: string) => {
     try {
@@ -269,7 +291,35 @@ export function ChatApp() {
     }
   };
 
-  const stop = () => abortRef.current?.abort();
+  const stop = useCallback(() => abortRef.current?.abort(), []);
+
+  // Raccourcis clavier globaux (Ctrl/⌘ + …)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (mod && e.shiftKey && (e.key === "O" || e.key === "o")) {
+        e.preventDefault();
+        newChat();
+      } else if (mod && !e.shiftKey && (e.key === "b" || e.key === "B")) {
+        e.preventDefault();
+        if (window.innerWidth < 768) setSidebarOpen((v) => !v);
+        else setCollapsed((v) => !v);
+      } else if (mod && !e.shiftKey && (e.key === "k" || e.key === "K")) {
+        e.preventDefault();
+        composerRef.current?.focus();
+      } else if (mod && e.shiftKey && (e.key === "L" || e.key === "l")) {
+        e.preventDefault();
+        setTheme(resolvedTheme === "dark" ? "light" : "dark");
+      } else if (mod && e.key === "/") {
+        e.preventDefault();
+        setShortcutsOpen((v) => !v);
+      } else if (e.key === "Escape") {
+        stop();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [newChat, stop, resolvedTheme, setTheme]);
 
   const regenerate = async () => {
     if (streaming || !activeId) return;
@@ -374,12 +424,16 @@ export function ChatApp() {
         activeId={activeId}
         open={sidebarOpen}
         busy={streaming}
+        collapsed={collapsed}
         onClose={() => setSidebarOpen(false)}
         onSelect={loadConversation}
         onNew={newChat}
         onRename={renameConversation}
         onDelete={deleteConversation}
+        onOpenShortcuts={() => setShortcutsOpen(true)}
       />
+
+      <ShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
 
       <main className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-3 md:px-5">
@@ -390,6 +444,15 @@ export function ChatApp() {
           >
             <Menu className="size-5" />
           </button>
+          {collapsed && (
+            <button
+              onClick={() => setCollapsed(false)}
+              aria-label="Afficher la barre latérale"
+              className="hidden rounded-lg p-2 text-muted-foreground hover:bg-accent hover:text-foreground md:block"
+            >
+              <PanelLeft className="size-5" />
+            </button>
+          )}
           <div className="relative">
             <button
               onClick={() => setModeOpen((v) => !v)}
@@ -503,7 +566,7 @@ export function ChatApp() {
                                   rel="noopener noreferrer"
                                   className="block"
                                 >
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  {/* eslint-disable-next-line @next/next/no-img-element -- data URL locale */}
                                   <img
                                     src={src}
                                     alt={`Image jointe ${i + 1}`}
@@ -602,6 +665,7 @@ export function ChatApp() {
           onToggleWeb={toggleWeb}
           onSend={(t, imgs) => void send(t, imgs)}
           onStop={stop}
+          composerRef={composerRef}
         />
       </main>
     </div>

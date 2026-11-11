@@ -18,7 +18,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Moon, Sun } from "lucide-react";
+import { Moon, Sun, Keyboard } from "lucide-react";
 
 function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
@@ -50,21 +50,25 @@ export function Sidebar({
   activeId,
   open,
   busy,
+  collapsed = false,
   onClose,
   onSelect,
   onNew,
   onRename,
   onDelete,
+  onOpenShortcuts,
 }: {
   conversations: ConversationItem[];
   activeId: string | null;
   open: boolean;
   busy: boolean;
+  collapsed?: boolean;
   onClose: () => void;
   onSelect: (id: string) => void;
   onNew: () => void;
   onRename: (id: string, title: string) => void;
   onDelete: (id: string) => void;
+  onOpenShortcuts: () => void;
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
@@ -96,8 +100,8 @@ export function Sidebar({
       )}
       <aside
         className={`fixed inset-y-0 left-0 z-40 flex w-[272px] flex-col border-r border-border bg-sidebar transition-transform duration-200 md:static md:translate-x-0 ${
-          open ? "translate-x-0" : "-translate-x-full"
-        }`}
+          collapsed ? "md:hidden" : ""
+        } ${open ? "translate-x-0" : "-translate-x-full"}`}
       >
         <div className="flex items-center justify-between px-4 pt-4">
           <div className="flex items-center gap-2">
@@ -207,7 +211,17 @@ export function Sidebar({
               <br />
               Sans abonnement, tes données restent locales.
             </p>
-            <ThemeToggle />
+            <div className="flex items-center gap-0.5">
+              <button
+                onClick={onOpenShortcuts}
+                aria-label="Raccourcis clavier"
+                title="Raccourcis clavier (Ctrl/⌘ + /)"
+                className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              >
+                <Keyboard className="size-4" />
+              </button>
+              <ThemeToggle />
+            </div>
           </div>
         </div>
       </aside>

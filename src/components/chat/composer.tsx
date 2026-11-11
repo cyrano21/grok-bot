@@ -11,16 +11,19 @@ export function Composer({
   onToggleWeb,
   onSend,
   onStop,
+  composerRef,
 }: {
   streaming: boolean;
   webSearch: boolean;
   onToggleWeb: () => void;
   onSend: (text: string, images: string[]) => void;
   onStop: () => void;
+  composerRef?: React.RefObject<HTMLTextAreaElement | null>;
 }) {
   const [value, setValue] = useState("");
   const [pending, setPending] = useState<string[]>([]);
-  const ref = useRef<HTMLTextAreaElement>(null);
+  const internalRef = useRef<HTMLTextAreaElement>(null);
+  const ref = composerRef ?? internalRef;
   const fileRef = useRef<HTMLInputElement>(null);
 
   const resize = () => {
@@ -73,7 +76,7 @@ export function Composer({
         <div className="mb-2 flex flex-wrap gap-2 px-1">
           {pending.map((src, i) => (
             <div key={i} className="group relative">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
+              {/* eslint-disable-next-line @next/next/no-img-element -- data URL locale */}
               <img
                 src={src}
                 alt={`Pièce jointe ${i + 1}`}
