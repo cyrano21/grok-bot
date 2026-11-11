@@ -1,13 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Bot, Copy, Check, Menu, Plus } from "lucide-react";
+import { Bot, Check, ChevronDown, Copy, Menu, Plus, RefreshCw, Zap, Brain } from "lucide-react";
 import { toast } from "sonner";
 import { Sidebar, type ConversationItem } from "./sidebar";
 import { Composer } from "./composer";
 import { MessageContent } from "./message-content";
 
 type Msg = { id: string; role: string; content: string };
+type Mode = "standard" | "raisonnement";
+
+const MODES: { id: Mode; label: string; desc: string; icon: typeof Zap }[] = [
+  { id: "standard", label: "Standard", desc: "Réponses rapides pour le quotidien", icon: Zap },
+  { id: "raisonnement", label: "Raisonnement", desc: "Réflexion approfondie pour les problèmes complexes", icon: Brain },
+];
 
 const SUGGESTIONS = [
   "Explique-moi les trous noirs comme si j'avais 10 ans",
@@ -25,6 +31,21 @@ export function ChatApp() {
   const [loadingConv, setLoadingConv] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [mode, setMode] = useState<Mode>("standard");
+  const [modeOpen, setModeOpen] = useState(false);
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem("grok-mode");
+    // Lecture post-montage obligatoire : localStorage indisponible côté serveur (SSR).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (saved === "standard" || saved === "raisonnement") setMode(saved);
+  }, []);
+
+  const changeMode = (m: Mode) => {
+    setMode(m);
+    setModeOpen(false);
+    window.localStorage.setItem("grok-mode", m);
+  };
 
   const abortRef = useRef<AbortController | null>(null);
   const accRef = useRef("");
@@ -140,7 +161,7 @@ export function ChatApp() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversationId: activeId, message: text }),
+        body: JSON.stringify({ conversationId: activeId, message: text, mode }),
         signal: controller.signal,
       });
       if (!res.ok || !res.body) {
@@ -203,6 +224,80 @@ export function ChatApp() {
 
   const stop = () => abortRef.current?.abort();
 
+  const regenerate = async () => {
+    if (streaming || !activeId) return;
+    const last = messages[messages.length - 1];
+    if (!last || last.role !== "assistant") return;
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setStreaming(true);
+    stickRef.current = true;
+    setMessages((prev) => prev.slice(0, -1));
+    setStreamingText("");
+    accRef.current = "";
+
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversationId: activeId, regenerate: true, mode }),
+        signal: controller.signal,
+      });
+      if (!res.ok || !res.body) {
+        const err = await res.json().catch(() => ({ error: "Erreur réseau" }));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      const reader = res.body.getReader();
+      const dec = new TextDecoder();
+      let buf = "";
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop() ?? "";
+        for (const line of lines) {
+          const t = line.trim();
+          if (!t.startsWith("data:")) continue;
+          const payload = t.slice(5).trim();
+          if (!payload || payload === "[DONE]") continue;
+          try {
+            const j = JSON.parse(payload);
+            accRef.current += j?.choices?.[0]?.delta?.content ?? "";
+            setStreamingText(accRef.current);
+          } catch {
+            /* frame partielle */
+          }
+        }
+      }
+      setMessages((prev) => [
+        ...prev,
+        { id: `a-${Date.now()}`, role: "assistant", content: accRef.current },
+      ]);
+      setStreamingText(null);
+    } catch (e) {
+      const err = e as Error;
+      if (err.name === "AbortError") {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `a-${Date.now()}`,
+            role: "assistant",
+            content: accRef.current || "_Génération arrêtée._",
+          },
+        ]);
+        setStreamingText(null);
+      } else {
+        setStreamingText(null);
+        toast.error(err.message || "Erreur inconnue");
+      }
+    } finally {
+      setStreaming(false);
+      abortRef.current = null;
+      void refreshList();
+    }
+  };
+
   const copyMessage = async (m: Msg) => {
     try {
       await navigator.clipboard.writeText(m.content);
@@ -238,9 +333,60 @@ export function ChatApp() {
           >
             <Menu className="size-5" />
           </button>
-          <h1 className="min-w-0 flex-1 truncate text-sm font-medium text-neutral-300">
-            {activeTitle || "Nouvelle conversation"}
-          </h1>
+          <div className="relative">
+            <button
+              onClick={() => setModeOpen((v) => !v)}
+              aria-haspopup="listbox"
+              aria-expanded={modeOpen}
+              aria-label="Choisir le mode du modèle"
+              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-semibold text-neutral-100 transition-colors hover:bg-white/10"
+            >
+              {mode === "standard" ? (
+                <Zap className="size-4 text-neutral-300" />
+              ) : (
+                <Brain className="size-4 text-neutral-300" />
+              )}
+              {mode === "standard" ? "Standard" : "Raisonnement"}
+              <ChevronDown className={`size-3.5 text-neutral-500 transition-transform ${modeOpen ? "rotate-180" : ""}`} />
+            </button>
+            {modeOpen && (
+              <>
+                <div className="fixed inset-0 z-20" onClick={() => setModeOpen(false)} aria-hidden="true" />
+                <div
+                  role="listbox"
+                  aria-label="Modes disponibles"
+                  className="absolute left-0 top-full z-30 mt-1.5 w-72 overflow-hidden rounded-xl border border-white/10 bg-[#141414] p-1 shadow-[0_12px_40px_rgba(0,0,0,0.6)]"
+                >
+                  {MODES.map((m) => {
+                    const Icon = m.icon;
+                    const active = mode === m.id;
+                    return (
+                      <button
+                        key={m.id}
+                        role="option"
+                        aria-selected={active}
+                        onClick={() => changeMode(m.id)}
+                        className={`flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left transition-colors ${
+                          active ? "bg-white/10" : "hover:bg-white/5"
+                        }`}
+                      >
+                        <Icon className="mt-0.5 size-4 shrink-0 text-neutral-300" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-medium text-neutral-100">{m.label}</span>
+                          <span className="block text-xs leading-4 text-neutral-500">{m.desc}</span>
+                        </span>
+                        {active && <Check className="mt-1 size-4 shrink-0 text-neutral-200" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+          <span className="hidden min-w-0 flex-1 truncate text-sm text-neutral-500 md:block">
+            {activeTitle || ""}
+          </span>
+          <span className="flex-1 md:hidden" />
           <button
             onClick={newChat}
             aria-label="Nouvelle conversation"
@@ -300,17 +446,28 @@ export function ChatApp() {
                         </div>
                         <div className="min-w-0 flex-1">
                           <MessageContent content={m.content} />
-                          <button
-                            onClick={() => void copyMessage(m)}
-                            aria-label="Copier la réponse"
-                            className="mt-2 rounded-md p-1.5 text-neutral-600 opacity-0 transition-opacity hover:bg-white/10 hover:text-neutral-300 focus:opacity-100 group-hover:opacity-100"
-                          >
-                            {copiedId === m.id ? (
-                              <Check className="size-3.5" />
-                            ) : (
-                              <Copy className="size-3.5" />
+                          <div className="mt-2 flex items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+                            <button
+                              onClick={() => void copyMessage(m)}
+                              aria-label="Copier la réponse"
+                              className="rounded-md p-1.5 text-neutral-600 hover:bg-white/10 hover:text-neutral-300"
+                            >
+                              {copiedId === m.id ? (
+                                <Check className="size-3.5" />
+                              ) : (
+                                <Copy className="size-3.5" />
+                              )}
+                            </button>
+                            {m.id === messages[messages.length - 1]?.id && (
+                              <button
+                                onClick={() => void regenerate()}
+                                aria-label="Régénérer la réponse"
+                                className="rounded-md p-1.5 text-neutral-600 hover:bg-white/10 hover:text-neutral-300"
+                              >
+                                <RefreshCw className="size-3.5" />
+                              </button>
                             )}
-                          </button>
+                          </div>
                         </div>
                       </div>
                     )

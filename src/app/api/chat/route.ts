@@ -20,9 +20,11 @@ export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => null);
     const message: string = (body?.message ?? "").toString().trim();
+    const regenerate: boolean = body?.regenerate === true;
+    const mode: string = body?.mode === "raisonnement" ? "raisonnement" : "standard";
     let conversationId: string | null = (body?.conversationId ?? "").toString() || null;
 
-    if (!message) {
+    if (!regenerate && !message) {
       return Response.json({ error: "Message requis" }, { status: 400 });
     }
 
@@ -31,6 +33,8 @@ export async function POST(req: Request) {
       if (!existing) {
         return Response.json({ error: "Conversation introuvable" }, { status: 404 });
       }
+    } else if (regenerate) {
+      return Response.json({ error: "Conversation introuvable" }, { status: 404 });
     } else {
       const created = await db.conversation.create({
         data: { title: message.replace(/\s+/g, " ").slice(0, 80) },
@@ -38,9 +42,25 @@ export async function POST(req: Request) {
       conversationId = created.id;
     }
 
-    await db.message.create({
-      data: { conversationId, role: "user", content: message },
-    });
+    if (regenerate) {
+      // Supprime les réponses assistant terminales pour repartir de la dernière question.
+      const all = await db.message.findMany({
+        where: { conversationId },
+        orderBy: { createdAt: "asc" },
+        select: { id: true, role: true },
+      });
+      while (all.length > 0 && all[all.length - 1].role === "assistant") {
+        const last = all.pop();
+        if (last) await db.message.delete({ where: { id: last.id } });
+      }
+      if (all.length === 0) {
+        return Response.json({ error: "Rien à régénérer" }, { status: 400 });
+      }
+    } else {
+      await db.message.create({
+        data: { conversationId, role: "user", content: message },
+      });
+    }
 
     const history = await db.message.findMany({
       where: { conversationId },
@@ -59,7 +79,7 @@ export async function POST(req: Request) {
         })),
       ],
       stream: true,
-      thinking: { type: "disabled" },
+      thinking: { type: mode === "raisonnement" ? "enabled" : "disabled" },
     })) as ReadableStream<Uint8Array>;
 
     const [toClient, toPersist] = sdkStream.tee();
