@@ -6,7 +6,15 @@
 // parent, aux cookies ni au localStorage de Grok Bot.
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, Copy, ExternalLink, Eye, Code2 } from "lucide-react";
+import {
+  Check,
+  Copy,
+  Download,
+  ExternalLink,
+  Eye,
+  Code2,
+  GripHorizontal,
+} from "lucide-react";
 
 function useDebounced<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -17,9 +25,14 @@ function useDebounced<T>(value: T, delay: number): T {
   return debounced;
 }
 
+const MIN_H = 220;
+const MAX_H = 900;
+
 export function HtmlPreview({ code, lang }: { code: string; lang?: string }) {
   const [tab, setTab] = useState<"code" | "apercu">("code");
   const [copied, setCopied] = useState(false);
+  const [height, setHeight] = useState(440);
+  const dragRef = useRef<{ startY: number; startH: number } | null>(null);
   const urlRef = useRef<string | null>(null);
   const debouncedCode = useDebounced(code, 400);
   // Recharge l'iframe à chaque version stabilisée du code.
@@ -32,6 +45,31 @@ export function HtmlPreview({ code, lang }: { code: string; lang?: string }) {
       setTimeout(() => setCopied(false), 1500);
     } catch {
       /* clipboard indisponible */
+    }
+  };
+
+  const fileName = useMemo(() => {
+    const t = code.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]?.trim();
+    const slug = (t || "page")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zA-Z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .toLowerCase()
+      .slice(0, 40);
+    return `${slug || "page"}.html`;
+  }, [code]);
+
+  const download = () => {
+    try {
+      const url = URL.createObjectURL(new Blob([code], { type: "text/html" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch {
+      /* téléchargement impossible */
     }
   };
 
@@ -100,6 +138,15 @@ export function HtmlPreview({ code, lang }: { code: string; lang?: string }) {
             {copied ? "Copié" : "Copier"}
           </button>
           <button
+            onClick={download}
+            aria-label={`Télécharger ${fileName}`}
+            title="Télécharger le fichier HTML"
+            className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <Download className="size-3.5" />
+            <span className="hidden sm:inline">Télécharger</span>
+          </button>
+          <button
             onClick={openInTab}
             aria-label="Ouvrir dans un nouvel onglet"
             title="Ouvrir dans un nouvel onglet"
@@ -121,9 +168,36 @@ export function HtmlPreview({ code, lang }: { code: string; lang?: string }) {
             srcDoc={srcDoc}
             sandbox="allow-scripts allow-forms allow-popups"
             referrerPolicy="no-referrer"
-            className="h-[440px] w-full rounded-lg border border-border bg-white"
+            style={{ height: `${height}px` }}
+            className="w-full rounded-lg border border-border bg-white"
           />
-          <p className="px-1 pt-1.5 text-[11px] text-muted-foreground/80">
+          <div
+            role="separator"
+            aria-orientation="horizontal"
+            aria-label="Redimensionner l'aperçu"
+            title="Glisser pour redimensionner"
+            onPointerDown={(e) => {
+              dragRef.current = { startY: e.clientY, startH: height };
+              try {
+                (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+              } catch {
+                /* capture indisponible : le drag fonctionne quand même */
+              }
+            }}
+            onPointerMove={(e) => {
+              const d = dragRef.current;
+              if (!d) return;
+              const h = d.startH + (e.clientY - d.startY);
+              setHeight(Math.min(MAX_H, Math.max(MIN_H, h)));
+            }}
+            onPointerUp={() => {
+              dragRef.current = null;
+            }}
+            className="mt-1.5 flex h-5 cursor-row-resize touch-none items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground select-none"
+          >
+            <GripHorizontal className="size-4" />
+          </div>
+          <p className="px-1 pt-1 text-[11px] text-muted-foreground/80">
             Aperçu isolé (sandbox) — le code généré ne peut pas accéder à Grok Bot.
           </p>
         </div>
